@@ -6,7 +6,7 @@ Connect to the `TuneAI Proxy API <https://studio.tune.app/>`_ and use our standa
 
 import json
 import requests
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 import tuneapi.utils as tu
 import tuneapi.types as tt
@@ -19,11 +19,12 @@ class TuneModel:
         self,
         id: Optional[str] = None,
         base_url: str = "https://proxy.tune.app/chat/completions",
+        api_token: Optional[str] = None,
         org_id: Optional[str] = None,
     ):
         self.tune_model_id = id or tu.ENV.TUNEAPI_MODEL("")
         self.base_url = base_url
-        self.tune_api_token = tu.ENV.TUNEAPI_TOKEN("")
+        self.tune_api_token = api_token or tu.ENV.TUNEAPI_TOKEN("")
         self.tune_org_id = org_id or tu.ENV.TUNEORG_ID("")
 
     def __repr__(self) -> str:
@@ -85,12 +86,12 @@ class TuneModel:
                     }
                 )
             elif m.role == tt.Message.FUNCTION_RESP:
-                _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
+                # _m = tu.from_json(m.value) if isinstance(m.value, str) else m.value
                 final_messages.append(
                     {
                         "role": "tool",
                         "tool_call_id": prev_tool_id,
-                        "content": tu.to_json(_m, tight=True),
+                        "content": tu.to_json(m.value, tight=True),
                     }
                 )
                 prev_tool_id = tu.get_random_string(5)  # reset tool id
@@ -112,7 +113,8 @@ class TuneModel:
         max_tokens: int = 1024,
         temperature: float = 0.7,
         token: Optional[str] = None,
-        timeout=(5, 30),
+        timeout=(5, 60),
+        stop: Optional[List[str]] = None,
         **kwargs,
     ) -> str | Dict[str, Any]:
         output = ""
@@ -123,6 +125,7 @@ class TuneModel:
             temperature=temperature,
             token=token,
             timeout=timeout,
+            stop=stop,
             **kwargs,
         ):
             if isinstance(x, dict):
@@ -139,7 +142,7 @@ class TuneModel:
         temperature: float = 0.7,
         token: Optional[str] = None,
         timeout=(5, 60),
-        stop_sequence: Optional[str] = None,
+        stop: Optional[List[str]] = None,
         raw: bool = False,
         debug: bool = False,
     ):
@@ -156,8 +159,8 @@ class TuneModel:
             "stream": True,
             "max_tokens": max_tokens,
         }
-        if stop_sequence:
-            data["stop_sequence"] = stop_sequence
+        if stop:
+            data["stop"] = stop
         if isinstance(chats, tt.Thread) and len(chats.tools):
             data["tools"] = [
                 {"type": "function", "function": x.to_dict()} for x in chats.tools
